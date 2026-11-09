@@ -77,6 +77,17 @@
                                     </v-btn>
                                 </router-link>
 
+                                <router-link to="/budget/list"
+                                             :aria-current="isTopNavigationActive('/budget/list') ? 'page' : undefined">
+                                    <v-btn class="top-navigation-button ms-1" density="comfortable" variant="text"
+                                           :aria-label="tt('Family Budget')" :icon="true"
+                                           :active="isTopNavigationActive('/budget/list')"
+                                           :color="isTopNavigationActive('/budget/list') ? 'primary' : 'default'">
+                                        <v-icon :icon="isTopNavigationActive('/budget/list') ? mdiChartBox : mdiChartBoxOutline" size="24" />
+                                        <v-tooltip activator="parent">{{ tt('Family Budget') }}</v-tooltip>
+                                    </v-btn>
+                                </router-link>
+
                                 <router-link to="/account/list"
                                              :aria-current="isTopNavigationActive('/account/list') ? 'page' : undefined">
                                     <v-btn class="top-navigation-button ms-1" density="comfortable" variant="text"
@@ -212,6 +223,8 @@ import {
     mdiChartPieOutline,
     mdiCompass,
     mdiCompassOutline,
+    mdiChartBoxOutline,
+    mdiChartBox,
     mdiPlus,
     mdiCellphone,
     mdiThemeLightDark,

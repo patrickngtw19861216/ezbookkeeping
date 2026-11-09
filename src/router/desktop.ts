@@ -19,6 +19,8 @@ import StatisticsTransactionPage from '@/views/desktop/statistics/TransactionPag
 
 import InsightsExplorerPage from '@/views/desktop/insights/ExplorerPage.vue';
 
+import BudgetListPage from '@/views/desktop/budgets/ListPage.vue';
+
 import AccountListPage from '@/views/desktop/accounts/ListPage.vue';
 
 import TransactionCategoryListPage from '@/views/desktop/categories/ListPage.vue';
@@ -147,6 +149,11 @@ const router = createRouter({
                 initTrendDateAggregationType: route.query['trendDateAggregationType'],
                 initAssetTrendsDateAggregationType: route.query['assetTrendsDateAggregationType']
             })
+        },
+        {
+            path: '/budget/list',
+            component: BudgetListPage,
+            beforeEnter: checkLogin
         },
         {
             path: '/insights/explorer',

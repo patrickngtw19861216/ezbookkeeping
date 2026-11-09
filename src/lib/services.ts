@@ -1040,5 +1040,11 @@ export default {
     },
     generateAmapApiInternalProxyUrl: (): string => {
         return `${window.location.origin}${getBasePath()}${BASE_AMAP_API_PROXY_URL_PATH}`;
+    },
+    getHouseholdBudget: (year: number, month: number): ApiResponsePromise<unknown> => {
+        return axios.get<ApiResponse<unknown>>(`v1/budget/household.json?year=${year}&month=${month}`);
+    },
+    updateHouseholdBudget: (req: { targetUid: string; categoryPath: string; yearMonth: string; amount: number }): ApiResponsePromise<boolean> => {
+        return axios.put<ApiResponse<boolean>>('v1/budget/household/update.json', req);
     }
 };

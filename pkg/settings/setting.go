@@ -512,6 +512,9 @@ type Config struct {
 
 	// Developer Tools
 	EnableLanguagePreview bool
+
+	// Budget
+	BudgetHouseholdMemberUids []int64
 }
 
 // LoadConfiguration loads setting config from given config file path
@@ -666,6 +669,12 @@ func LoadConfiguration(configFilePath string) (*Config, error) {
 	}
 
 	err = loadDeveloperTools(config, cfgFile, "developer")
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = loadBudgetConfiguration(config, cfgFile, "budget")
 
 	if err != nil {
 		return nil, err
@@ -1656,4 +1665,20 @@ func getLogLevel(logLevelStr string) (Level, error) {
 	}
 
 	return "", errs.ErrInvalidLogLevel
+}
+
+func loadBudgetConfiguration(config *Config, configFile *ini.File, sectionName string) error {
+	raw := getConfigItemStringValue(configFile, sectionName, "household_member_uids")
+	config.BudgetHouseholdMemberUids = nil
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		uid, err := strconv.ParseInt(part, 10, 64)
+		if err == nil && uid > 0 {
+			config.BudgetHouseholdMemberUids = append(config.BudgetHouseholdMemberUids, uid)
+		}
+	}
+	return nil
 }
