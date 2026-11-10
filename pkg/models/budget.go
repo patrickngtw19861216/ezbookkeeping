@@ -13,10 +13,10 @@ type Budget struct {
 
 // HouseholdBudgetMemberData holds budget + spent for one member in one category
 type HouseholdBudgetMemberData struct {
-	Uid      int64  `json:"uid,string"`
-	Budgeted int64  `json:"budgeted"`
-	Spent    int64  `json:"spent"`
-	Balance  int64  `json:"balance"`
+	Uid      int64 `json:"uid,string"`
+	Budgeted int64 `json:"budgeted"`
+	Spent    int64 `json:"spent"`
+	Balance  int64 `json:"balance"`
 }
 
 // HouseholdBudgetRow is one row in the household budget view
@@ -41,10 +41,10 @@ type HouseholdBudgetMember struct {
 
 // HouseholdBudgetResponse is the top-level response for GET /api/v1/budget/household.json
 type HouseholdBudgetResponse struct {
-	Year    int32                   `json:"year"`
-	Month   int32                   `json:"month"`
+	Year    int32                    `json:"year"`
+	Month   int32                    `json:"month"`
 	Members []*HouseholdBudgetMember `json:"members"`
-	Groups  []*HouseholdBudgetGroup `json:"groups"`
+	Groups  []*HouseholdBudgetGroup  `json:"groups"`
 }
 
 // HouseholdBudgetUpdateRequest is the body for PUT /api/v1/budget/household/update.json
@@ -57,6 +57,42 @@ type HouseholdBudgetUpdateRequest struct {
 
 // HouseholdBudgetQueryRequest is the query params for GET /api/v1/budget/household.json
 type HouseholdBudgetQueryRequest struct {
-	Year  int32 `form:"year" binding:"required,min=2000,max=9999"`
-	Month int32 `form:"month" binding:"required,min=1,max=12"`
+	Year  int32  `form:"year" binding:"required,min=2000,max=9999"`
+	Month int32  `form:"month" binding:"required,min=1,max=12"`
+	All   string `form:"all"` // "1" to include zero-data rows (for Set Budget tab)
+}
+
+// --- Snapshot types ---
+
+// BudgetSnapshotEntry is one budget record inside a snapshot file.
+type BudgetSnapshotEntry struct {
+	Uid          int64  `json:"uid,string"`
+	CategoryPath string `json:"categoryPath"`
+	Amount       int64  `json:"amount"`
+}
+
+// BudgetSnapshot is the structure written to each snapshot JSON file.
+type BudgetSnapshot struct {
+	SavedAt   string                   `json:"savedAt"`   // "2026-11-09T15:04:05+08:00"
+	YearMonth string                   `json:"yearMonth"` // "2026-11"
+	Members   []*HouseholdBudgetMember `json:"members"`
+	Budgets   []*BudgetSnapshotEntry   `json:"budgets"`
+}
+
+// BudgetSnapshotSummary is one entry in the list-snapshots response.
+type BudgetSnapshotSummary struct {
+	Key       string `json:"key"`       // "20261109-202611" (filename without .json)
+	Date      string `json:"date"`      // "20261109"
+	YearMonth string `json:"yearMonth"` // "2026-11"
+}
+
+// HouseholdBudgetBulkSaveRequest is the POST body for /budget/household/bulk-save.json
+type HouseholdBudgetBulkSaveRequest struct {
+	YearMonth string               `json:"yearMonth" binding:"required,len=7"`
+	Entries   []*BudgetSnapshotEntry `json:"entries"`
+}
+
+// HouseholdBudgetSnapshotKeyRequest is the query param for GET /budget/household/snapshot.json
+type HouseholdBudgetSnapshotKeyRequest struct {
+	Key string `form:"key" binding:"required"`
 }

@@ -528,6 +528,9 @@ func startWebServer(c *core.CliContext) error {
 			// Household Budget
 			apiV1Route.GET("/budget/household.json", bindApi(api.Budgets.HouseholdViewHandler, config))
 			apiV1Route.PUT("/budget/household/update.json", bindApi(api.Budgets.UpdateBudgetHandler, config))
+			apiV1Route.POST("/budget/household/bulk-save.json", bindApi(api.Budgets.BulkSaveHandler, config))
+			apiV1Route.GET("/budget/household/snapshots.json", bindApi(api.Budgets.ListSnapshotsHandler, config))
+			apiV1Route.GET("/budget/household/snapshot.json", bindApi(api.Budgets.GetSnapshotHandler, config))
 
 			// System
 			apiV1Route.GET("/systems/version.json", bindApi(api.Systems.VersionHandler, config))

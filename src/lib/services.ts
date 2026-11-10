@@ -1041,10 +1041,20 @@ export default {
     generateAmapApiInternalProxyUrl: (): string => {
         return `${window.location.origin}${getBasePath()}${BASE_AMAP_API_PROXY_URL_PATH}`;
     },
-    getHouseholdBudget: (year: number, month: number): ApiResponsePromise<unknown> => {
-        return axios.get<ApiResponse<unknown>>(`v1/budget/household.json?year=${year}&month=${month}`);
+    getHouseholdBudget: (year: number, month: number, all?: boolean): ApiResponsePromise<unknown> => {
+        const q = all ? '&all=1' : '';
+        return axios.get<ApiResponse<unknown>>(`v1/budget/household.json?year=${year}&month=${month}${q}`);
     },
     updateHouseholdBudget: (req: { targetUid: string; categoryPath: string; yearMonth: string; amount: number }): ApiResponsePromise<boolean> => {
         return axios.put<ApiResponse<boolean>>('v1/budget/household/update.json', req);
+    },
+    bulkSaveHouseholdBudget: (req: { yearMonth: string; entries: { uid: string; categoryPath: string; amount: number }[] }): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/budget/household/bulk-save.json', req);
+    },
+    listBudgetSnapshots: (): ApiResponsePromise<unknown> => {
+        return axios.get<ApiResponse<unknown>>('v1/budget/household/snapshots.json');
+    },
+    getBudgetSnapshot: (key: string): ApiResponsePromise<unknown> => {
+        return axios.get<ApiResponse<unknown>>(`v1/budget/household/snapshot.json?key=${encodeURIComponent(key)}`);
     }
 };

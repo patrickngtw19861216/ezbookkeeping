@@ -1,7 +1,10 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -51,7 +54,8 @@ var HouseholdBudgets = &HouseholdBudgetService{
 
 // GetHouseholdBudgetView returns the combined household budget view for a given year/month.
 // memberUids is the ordered list of household member UIDs.
-func (s *HouseholdBudgetService) GetHouseholdBudgetView(c core.Context, year int32, month int32, memberUids []int64) (*models.HouseholdBudgetResponse, error) {
+// When showAll is true, all canonical categories are included even if budget and spent are zero.
+func (s *HouseholdBudgetService) GetHouseholdBudgetView(c core.Context, year int32, month int32, memberUids []int64, showAll bool) (*models.HouseholdBudgetResponse, error) {
 	minTxTime, maxTxTime, err := utils.GetTransactionTimeRangeByYearMonth(year, month)
 	if err != nil {
 		return nil, errs.ErrSystemError
@@ -173,7 +177,7 @@ func (s *HouseholdBudgetService) GetHouseholdBudgetView(c core.Context, year int
 		return sortedPaths[i] < sortedPaths[j]
 	})
 
-	// --- Build rows, skipping paths where everyone has 0 budget and 0 spent ---
+	// --- Build rows, optionally skipping paths where everyone has 0 budget and 0 spent ---
 	rows := make([]*models.HouseholdBudgetRow, 0, len(sortedPaths))
 	for _, path := range sortedPaths {
 		anyNonZero := false
@@ -191,7 +195,7 @@ func (s *HouseholdBudgetService) GetHouseholdBudgetView(c core.Context, year int
 				Balance:  budgeted - spent,
 			})
 		}
-		if !anyNonZero {
+		if !anyNonZero && !showAll {
 			continue
 		}
 
@@ -264,6 +268,116 @@ func (s *HouseholdBudgetService) UpsertBudget(c core.Context, uid int64, categor
 	return err
 }
 
+// SaveSnapshot writes the current DB budgets for yearMonth to a dated JSON file.
+// Files are named {YYYYMMDD}-{YYYYMM}.json (e.g. 20261109-202611.json) in a
+// budget_snapshots/ directory next to the SQLite database file.
+func (s *HouseholdBudgetService) SaveSnapshot(c core.Context, dbPath string, yearMonth string, memberUids []int64) error {
+	hkt := time.FixedZone("HKT", 8*3600)
+	now := time.Now().In(hkt)
+	saveDate := now.Format("20060102")
+	ymKey := strings.ReplaceAll(yearMonth, "-", "") // "2026-11" → "202611"
+
+	// Gather member info
+	members := make([]*models.HouseholdBudgetMember, 0, len(memberUids))
+	for _, uid := range memberUids {
+		user, err := Users.GetUserById(c, uid)
+		if err != nil {
+			return err
+		}
+		members = append(members, &models.HouseholdBudgetMember{Uid: uid, Nickname: user.Nickname})
+	}
+
+	// Gather all budget rows from DB
+	entries := make([]*models.BudgetSnapshotEntry, 0)
+	for _, uid := range memberUids {
+		var budgetRows []*models.Budget
+		err := s.UserDataDB(uid).NewSession(c).
+			Where("uid=? AND year_month=?", uid, yearMonth).
+			Find(&budgetRows)
+		if err != nil {
+			return err
+		}
+		for _, b := range budgetRows {
+			entries = append(entries, &models.BudgetSnapshotEntry{
+				Uid:          uid,
+				CategoryPath: b.CategoryPath,
+				Amount:       b.Amount,
+			})
+		}
+	}
+
+	snapshot := &models.BudgetSnapshot{
+		SavedAt:   now.Format(time.RFC3339),
+		YearMonth: yearMonth,
+		Members:   members,
+		Budgets:   entries,
+	}
+
+	snapshotDir := filepath.Join(filepath.Dir(dbPath), "budget_snapshots")
+	if err := os.MkdirAll(snapshotDir, 0750); err != nil {
+		return err
+	}
+	filename := saveDate + "-" + ymKey + ".json"
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(snapshotDir, filename), data, 0640)
+}
+
+// ListSnapshots returns all available snapshot summaries sorted newest-first.
+func (s *HouseholdBudgetService) ListSnapshots(dbPath string) ([]*models.BudgetSnapshotSummary, error) {
+	snapshotDir := filepath.Join(filepath.Dir(dbPath), "budget_snapshots")
+	dirEntries, err := os.ReadDir(snapshotDir)
+	if os.IsNotExist(err) {
+		return []*models.BudgetSnapshotSummary{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*models.BudgetSnapshotSummary, 0, len(dirEntries))
+	for _, de := range dirEntries {
+		if de.IsDir() || !strings.HasSuffix(de.Name(), ".json") {
+			continue
+		}
+		key := strings.TrimSuffix(de.Name(), ".json") // "20261109-202611"
+		parts := strings.SplitN(key, "-", 2)
+		if len(parts) != 2 || len(parts[0]) != 8 || len(parts[1]) != 6 {
+			continue
+		}
+		saveDate := parts[0]
+		ymKey := parts[1]
+		ymDisplay := ymKey[:4] + "-" + ymKey[4:] // "202611" → "2026-11"
+		result = append(result, &models.BudgetSnapshotSummary{
+			Key:       key,
+			Date:      saveDate,
+			YearMonth: ymDisplay,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Key > result[j].Key })
+	return result, nil
+}
+
+// LoadSnapshot reads one snapshot file by key (filename without .json).
+// Returns nil, nil if the file does not exist.
+func (s *HouseholdBudgetService) LoadSnapshot(dbPath string, key string) (*models.BudgetSnapshot, error) {
+	snapshotDir := filepath.Join(filepath.Dir(dbPath), "budget_snapshots")
+	filePath := filepath.Join(snapshotDir, key+".json")
+	raw, err := os.ReadFile(filePath)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var snap models.BudgetSnapshot
+	if err := json.Unmarshal(raw, &snap); err != nil {
+		return nil, err
+	}
+	return &snap, nil
+}
+
 func groupBudgetRows(rows []*models.HouseholdBudgetRow) []*models.HouseholdBudgetGroup {
 	groups := make([]*models.HouseholdBudgetGroup, 0)
 	groupMap := make(map[string]*models.HouseholdBudgetGroup)
@@ -287,4 +401,3 @@ func groupBudgetRows(rows []*models.HouseholdBudgetRow) []*models.HouseholdBudge
 
 	return groups
 }
-
